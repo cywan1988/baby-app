@@ -14,17 +14,18 @@ jobs:
       - name: Grant camera/mic & allow HTTP
         run: |
           python3 - <<'EOF'
+          import re
           p = "android/app/src/main/AndroidManifest.xml"
           s = open(p, encoding="utf-8").read()
           if "RECORD_AUDIO" not in s:
-              s = s.replace("<manifest",
-                  '<manifest\n    <uses-permission android:name="android.permission.CAMERA" />\n'
-                  '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n'
-                  '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />', 1)
+              perms = ('\n    <uses-permission android:name="android.permission.CAMERA" />'
+                       '\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />'
+                       '\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />')
+              s = re.sub(r"(<manifest[^>]*>)", lambda m: m.group(1) + perms, s, count=1)
           if "usesCleartextTraffic" not in s:
               s = s.replace("<application", '<application android:usesCleartextTraffic="true"', 1)
           open(p, "w", encoding="utf-8").write(s)
-          print("patched")
+          print("patched OK")
           EOF
       - name: Build APK
         run: |
