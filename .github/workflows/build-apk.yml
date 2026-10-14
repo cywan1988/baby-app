@@ -15,8 +15,10 @@ jobs:
           mkdir -p www
           cp index.html manifest.webmanifest sw.js README.md www/ 2>/dev/null || true
           cp icon-180.png icon-192.png icon-512.png icon-maskable-512.png www/ 2>/dev/null || true
-          ls www/
+      - name: Build native bridge (TTS)
+        run: npx esbuild bridge.ts --bundle --format=iife --outfile=www/native-bridge.js
       - run: npx cap add android
+      - run: npx cap sync android
       - name: Grant camera/mic & allow HTTP
         run: |
           python3 - <<'EOF'
@@ -24,9 +26,12 @@ jobs:
           p = "android/app/src/main/AndroidManifest.xml"
           s = open(p, encoding="utf-8").read()
           if "RECORD_AUDIO" not in s:
-              perms = ('\n    <uses-permission android:name="android.permission.CAMERA" />'
-                       '\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />'
-                       '\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />')
+              perms = ('
+    <uses-permission android:name="android.permission.CAMERA" />'
+                       '
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />'
+                       '
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />')
               s = re.sub(r"(<manifest[^>]*>)", lambda m: m.group(1) + perms, s, count=1)
           if "usesCleartextTraffic" not in s:
               s = s.replace("<application", '<application android:usesCleartextTraffic="true"', 1)
