@@ -21,23 +21,19 @@ jobs:
       - run: npx cap sync android
       - name: Grant camera/mic & allow HTTP
         run: |
-          python3 - <<'EOF'
+          python3 - <<'PYEOF'
           import re
           p = "android/app/src/main/AndroidManifest.xml"
           s = open(p, encoding="utf-8").read()
           if "RECORD_AUDIO" not in s:
-              perms = ('
-    <uses-permission android:name="android.permission.CAMERA" />'
-                       '
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />'
-                       '
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />')
+              tag = '<uses-permission android:name="android.permission.%s" />'
+              perms = "".join(chr(10) + "    " + (tag % n) for n in ["CAMERA", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"])
               s = re.sub(r"(<manifest[^>]*>)", lambda m: m.group(1) + perms, s, count=1)
           if "usesCleartextTraffic" not in s:
               s = s.replace("<application", '<application android:usesCleartextTraffic="true"', 1)
           open(p, "w", encoding="utf-8").write(s)
           print("patched OK")
-          EOF
+          PYEOF
       - name: Build APK
         run: |
           cd android
