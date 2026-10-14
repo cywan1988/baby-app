@@ -306,7 +306,7 @@
       <label>常用服务商一键填充</label>
       <select id="setProvider" style="width:100%;border:2px solid #eee;border-radius:10px;padding:10px 12px;font-size:15px;background:#fff;">
         <option value="">— 点选后自动填入接口地址和模型 —</option>
-        <option value="https://api.moonshot.cn/v1|moonshot-v1-8k">Kimi 月之暗面（国内，需中转）</option>
+        <option value="https://api.moonshot.cn/v1|kimi-k2.6">Kimi 月之暗面（国内，需中转）</option>
         <option value="https://api.deepseek.com/v1|deepseek-chat">DeepSeek 深度求索（国内，需中转）</option>
         <option value="https://dashscope.aliyuncs.com/compatible-mode/v1|qwen-plus">通义千问 阿里云（需中转）</option>
         <option value="https://openrouter.ai/api/v1|openai/gpt-4o-mini">OpenRouter（国外，浏览器可直连）</option>
@@ -322,7 +322,7 @@
     </div>
     <div class="set-field">
       <label>模型名称</label>
-      <input type="text" id="setModel" placeholder="moonshot-v1-8k">
+      <input type="text" id="setModel" placeholder="kimi-k2.6">
     </div>
     <div class="set-field">
       <label>API Key（只存在你自己的浏览器里，不会上传）</label>
@@ -370,6 +370,7 @@
 
 <div class="foot">建议用 Chrome / Edge 打开 · 摄像头权限仅用于本地识别 · 语音为浏览器语音合成 · 画面永不上传</div>
 
+<script src="native-bridge.js"></script>
 <script>
 /* ============================================================
    AI宝宝陪伴老师  —— 单文件网页应用
@@ -419,36 +420,40 @@ function getSysPrompt(){
 let lastLLMError = "";
 async function llmChat(userPrompt, sysPrompt){
   if (!llmCfg.endpoint || !llmCfg.key) { lastLLMError = "请先填写接口地址和API Key"; return null; }
+  const base = llmCfg.endpoint.replace(/\/+$/, "");
+  const payload = {
+    model: llmCfg.model || "kimi-k2.6",
+    messages: [
+      { role: "system", content: sysPrompt || getSysPrompt() },
+      { role: "user", content: userPrompt }
+    ],
+    temperature: 0.6,
+    max_tokens: 150,
+    thinking: { type: "disabled" }
+  };
+  const headers = { "Content-Type": "application/json", "Authorization": "Bearer " + llmCfg.key };
+  // APP 原生环境：走 CapacitorHttp（系统级网络，彻底绕过 CORS 和混合内容限制）
+  const capHttp = (typeof Capacitor !== "undefined" && Capacitor.Plugins) ? Capacitor.Plugins.CapacitorHttp : null;
+  let status = 0, j = null;
   try {
-    const base = llmCfg.endpoint.replace(/\/+$/, "");
-    const r = await fetch(base + "/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + llmCfg.key },
-      body: JSON.stringify({
-        model: llmCfg.model || "moonshot-v1-8k",
-        messages: [
-          { role: "system", content: sysPrompt || getSysPrompt() },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.85,
-        max_tokens: 150
-      })
-    });
-    if (!r.ok){
-      lastLLMError = "HTTP " + r.status + (
-        r.status === 401 ? "（Key 无效或未开通）" :
-        r.status === 404 ? "（地址不对，应是 .../v1 结尾，不要带 /chat/completions）" :
-        r.status === 429 ? "（额度用完了）" : "");
-      return null;
+    if (capHttp){
+      const ret = await capHttp.post({ url: base + "/chat/completions", headers, data: payload });
+      status = ret.status; j = ret.data;
+    } else {
+      const r = await fetch(base + "/chat/completions", { method: "POST", headers, body: JSON.stringify(payload) });
+      status = r.status;
+      if (r.ok) j = await r.json();
     }
-    const j = await r.json();
+    if (status === 401){ lastLLMError = "HTTP 401（Key 或口令不对）"; return null; }
+    if (status === 404){ lastLLMError = "HTTP 404（地址不对，应是 .../v1 或 .../api、/kimi，不带 /chat/completions）"; return null; }
+    if (status === 429){ lastLLMError = "HTTP 429（请求太频繁或额度用完）"; return null; }
+    if (!j){ lastLLMError = "HTTP " + status + "，上游无响应"; return null; }
     const text = ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim();
     lastLLMError = text ? "" : "接口返回了空内容";
     return text || null;
   } catch(e){
-    lastLLMError = (e.message && e.message.indexOf("Failed to fetch") >= 0)
-      ? "请求被浏览器拦截：跨域(CORS) 或网络不通"
-      : ("异常：" + e.message);
+    lastLLMError = capHttp ? ("原生请求失败：" + e.message)
+      : ((e.message && e.message.indexOf("Failed to fetch") >= 0) ? "请求被浏览器拦截：跨域(CORS) 或网络不通" : ("异常：" + e.message));
     return null;
   }
 }
@@ -470,10 +475,30 @@ function pickVoice(){
 }
 if ("speechSynthesis" in window){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
 
+/* APP 原生 TTS 支持（WebView 没有 speechSynthesis，由 native-bridge.js 注入 window.NativeTTS） */
+function nativeTTSAvailable(){ return !!(window.NativeTTS && window.NativeTTS.isSupported); }
+function ttsSpeaking(){ return nativeTTSAvailable() ? !!window.__nativeTtsBusy : ("speechSynthesis" in window && speechSynthesis.speaking); }
+function ttsStopAll(){
+  if (window.NativeTTS && NativeTTS.stop) NativeTTS.stop().catch(() => {});
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+}
+
 function say(text, opt = {}){
+  if (nativeTTSAvailable()){
+    if (window.__nativeTtsBusy && !opt.force) return; // 不打断正在说的话
+    ttsStopAll();
+    window.__nativeTtsBusy = true;
+    const Rn = ROLES[curRole];
+    NativeTTS.speak(text, {
+      rate: (opt.rate || settings.rate) * Rn.rate,
+      pitch: opt.pitch || Rn.pitch,
+      volume: settings.vol
+    }).catch(() => {}).finally(() => { window.__nativeTtsBusy = false; });
+    return;
+  }
   if (!("speechSynthesis" in window)) return;
   if (speechSynthesis.speaking && !opt.force){ return; } // 不打断正在说的话
-  speechSynthesis.cancel();
+  ttsStopAll();
   const u = new SpeechSynthesisUtterance(text);
   if (zhVoice) u.voice = zhVoice;
   u.lang = "zh-CN";
@@ -486,8 +511,21 @@ function say(text, opt = {}){
 }
 function sayWait(text, opt = {}){
   return new Promise(res => {
+    if (nativeTTSAvailable()){
+      ttsStopAll();
+      window.__nativeTtsBusy = true;
+      const Rn2 = ROLES[curRole];
+      const done = () => { window.__nativeTtsBusy = false; res(); };
+      NativeTTS.speak(text, {
+        rate: (opt.rate || settings.rate) * Rn2.rate,
+        pitch: opt.pitch || Rn2.pitch,
+        volume: settings.vol
+      }).then(done).catch(done);
+      setTimeout(done, 15000); // 兜底：引擎异常时也不卡住流程
+      return;
+    }
     if (!("speechSynthesis" in window)) return res();
-    speechSynthesis.cancel();
+    ttsStopAll();
     const u = new SpeechSynthesisUtterance(text);
     if (zhVoice) u.voice = zhVoice;
     u.lang = "zh-CN";
@@ -1259,7 +1297,7 @@ function autoDecide(){
 }
 
 function autoTick(){
-  if (AUTO.enabled && !rhymePlaying && !bbAutoPlaying && !speechSynthesis.speaking){
+  if (AUTO.enabled && !rhymePlaying && !bbAutoPlaying && !ttsSpeaking()){
     const now = Date.now();
     if (now - AUTO.lastUserAction > USER_GAP && now - AUTO.lastAction > AUTO_GAP){
       if (currentActivity === "离开"){ if (now - AUTO.lastAction > 20000) autoDecide(); }
