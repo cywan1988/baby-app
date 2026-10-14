@@ -1,0 +1,18 @@
+{
+  "name": "AI宝宝陪伴老师",
+  "short_name": "宝宝陪伴",
+  "description": "看宝宝、懂动作、会聊天、唱儿歌、教认字的AI陪伴者",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff7e6",
+  "theme_color": "#ff8f8f",
+  "lang": "zh-CN",
+  "categories": ["education", "kids", "family"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
