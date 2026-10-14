@@ -10,6 +10,12 @@ jobs:
         with:
           node-version: 20
       - run: npm install
+      - name: Prepare www folder
+        run: |
+          mkdir -p www
+          cp index.html manifest.webmanifest sw.js README.md www/ 2>/dev/null || true
+          cp icon-180.png icon-192.png icon-512.png icon-maskable-512.png www/ 2>/dev/null || true
+          ls www/
       - run: npx cap add android
       - name: Grant camera/mic & allow HTTP
         run: |
