@@ -1,0 +1,38 @@
+name: Build APK
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npx cap add android
+      - name: Grant camera/mic & allow HTTP
+        run: |
+          python3 - <<'EOF'
+          p = "android/app/src/main/AndroidManifest.xml"
+          s = open(p, encoding="utf-8").read()
+          if "RECORD_AUDIO" not in s:
+              s = s.replace("<manifest",
+                  '<manifest\n    <uses-permission android:name="android.permission.CAMERA" />\n'
+                  '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n'
+                  '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />', 1)
+          if "usesCleartextTraffic" not in s:
+              s = s.replace("<application", '<application android:usesCleartextTraffic="true"', 1)
+          open(p, "w", encoding="utf-8").write(s)
+          print("patched")
+          EOF
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: baby-ai-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
