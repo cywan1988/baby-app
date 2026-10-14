@@ -1,6 +1,6 @@
 {
   "appId": "cn.carefirst.baby",
   "appName": "宝宝陪伴",
-  "webDir": ".",
+  "webDir": "www",
   "android": { "allowMixedContent": true }
 }
