@@ -2,5 +2,9 @@
   "appId": "cn.carefirst.baby",
   "appName": "宝宝陪伴",
   "webDir": "www",
-  "android": { "allowMixedContent": true }
+  "android": { "allowMixedContent": true },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true },
+    "TextToSpeech": {}
+  }
 }
